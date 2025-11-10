@@ -9,69 +9,67 @@ import json
 import requests
 import asyncio
 import sys
+import subprocess
 from datetime import datetime
 from functools import wraps
 from typing import Dict, Any, List
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Updater,
+    Application,
     CommandHandler,
-    CallbackContext,
+    ContextTypes,
     MessageHandler,
-    Filters,
+    filters,
     CallbackQueryHandler
 )
 
 # ---------------------------
-# Configuration - Environment Variables
+# ᴄᴏɴꜰɪɢᴜʀᴀᴛɪᴏɴ
 # ---------------------------
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "7996314470,7147401720").split(",")]
-REQUIRED_CHANNELS = os.getenv("REQUIRED_CHANNELS", "@ItsMeVishalSupport,@anniemusicsupport").split(",")
+BOT_TOKEN = os.getenv("CLOUDWAYS_BOT_TOKEN") or "8485686944:AAH-NNQK2UBSraeZ9balu70-yLYZl00K_P4"
+ADMIN_IDS = [7996314470, 7147401720]
+REQUIRED_CHANNELS = ["@ItsMeVishalSupport", "@anniemusicsupport"]
 
-DB_PATH = "/tmp/cloudways_bot.db" if 'RENDER' in os.environ else "cloudways_bot.db"
+DB_PATH = "cloudways_bot.db"
 DEFAULT_CREDITS = 10
 
 CLOUDWAYS_SIGNUP_API = "https://api.cloudways.com/api/v2/guest/signup"
 
 # ---------------------------
-# Logging Configuration
+# ʟᴏɢɢɪɴɢ
 # ---------------------------
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    level=logging.INFO
 )
 logger = logging.getLogger("cloudways_bot")
 
 # ---------------------------
-# Utility: Run blocking in executor
+# ᴜᴛɪʟɪᴛʏ: ʀᴜɴ ʙʟᴏᴄᴋɪɴɢ ɪɴ ᴇxᴇᴄᴜᴛᴏʀ
 # ---------------------------
-def run_blocking(func):
+def ᴠɪꜱʜᴀʟ_ʀᴜɴ_ʙʟᴏᴄᴋɪɴɢ(func):
     @wraps(func)
-    async def wrapper(*args, **kwargs):
+    async def ᴠɪꜱʜᴀʟ_ᴡʀᴀᴘᴘᴇʀ(*args, **kwargs):
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
-    return wrapper
+    return ᴠɪꜱʜᴀʟ_ᴡʀᴀᴘᴘᴇʀ
 
 # ---------------------------
-# Bot Class
+# ʙᴏᴛ ᴄʟᴀꜱꜱ
 # ---------------------------
-class CloudwaysBot:
+class ᴄʟᴏᴜᴅᴡᴀʏꜱʙᴏᴛ:
     def __init__(self, db_path=DB_PATH):
         self.db_path = db_path
-        self._ensure_db()
+        self._ᴠɪꜱʜᴀʟ_ᴇɴꜱᴜʀᴇ_ᴅʙ()
 
-    def _connect(self):
+    def _ᴠɪꜱʜᴀʟ_ᴄᴏɴɴᴇᴄᴛ(self):
         conn = sqlite3.connect(self.db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
 
-    def _ensure_db(self):
-        conn = self._connect()
+    def _ᴠɪꜱʜᴀʟ_ᴇɴꜱᴜʀᴇ_ᴅʙ(self):
+        conn = self._ᴠɪꜱʜᴀʟ_ᴄᴏɴɴᴇᴄᴛ()
         cur = conn.cursor()
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS users (
@@ -101,54 +99,126 @@ class CloudwaysBot:
         conn.close()
 
     # ---------------------------
-    # Restart Function
+    # ʀᴇꜱᴛᴀʀᴛ ꜰᴜɴᴄᴛɪᴏɴ - ᴅᴇʟᴇᴛᴇꜱ ᴀʟʟ ꜱᴀᴠᴇᴅ ꜰɪʟᴇꜱ ᴀɴᴅ ʀᴇꜱᴛᴀʀᴛꜱ ʙᴏᴛ
     # ---------------------------
-    def cmd_restart(self, update: Update, context: CallbackContext):
+    async def ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ʀᴇꜱᴛᴀʀᴛ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         if user_id not in ADMIN_IDS:
-            update.message.reply_text("❌ Unauthorized.")
+            await update.message.reply_text("❌ ᴜɴᴀᴜᴛʜᴏʀɪᴢᴇᴅ.")
             return
 
-        update.message.reply_text("🔄 **Restarting bot...**")
-        
-        files_deleted = self._cleanup_files()
-        
-        restart_message = (
-            "♻️ **Bot Restart Initiated** ♻️\n\n"
-            f"🗑️ **Files cleaned up:** {files_deleted}\n"
-            f"🕒 **Timestamp:** `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n\n"
-            "🔄 **Bot is now ready for use!**"
-        )
+        await update.message.reply_text("🔄 **ʀᴇꜱᴛᴀʀᴛɪɴɢ ʙᴏᴛ ᴀɴᴅ ᴄʟᴇᴀɴɪɴɢ ᴀʟʟ ᴅᴀᴛᴀ...**")
 
-        update.message.reply_text(restart_message, parse_mode="Markdown")
+        try:
+            # ʟᴏɢ ʀᴇꜱᴛᴀʀᴛ ᴀᴄᴛɪᴏɴ
+            logger.info(f"🔄 ʀᴇꜱᴛᴀʀᴛ ɪɴɪᴛɪᴀᴛᴇᴅ ʙʏ ᴜꜱᴇʀ: {user_id}")
 
-    def _cleanup_files(self) -> int:
-        """Clean up temporary files"""
+            # ᴅᴇʟᴇᴛᴇ ᴀʟʟ ꜱᴀᴠᴇᴅ ꜰɪʟᴇꜱ
+            files_deleted = self._ᴠɪꜱʜᴀʟ_ᴄʟᴇᴀɴ_ᴜᴘ_ꜰɪʟᴇꜱ()
+
+            # ʀᴇꜱᴇᴛ ᴅᴀᴛᴀʙᴀꜱᴇ
+            db_reset = self._ᴠɪꜱʜᴀʟ_ʀᴇꜱᴇᴛ_ᴅᴀᴛᴀʙᴀꜱᴇ()
+
+            restart_message = (
+                "♻️ **ʙᴏᴛ ʀᴇꜱᴛᴀʀᴛ ᴄᴏᴍᴘʟᴇᴛᴇᴅ** ♻️\n\n"
+                f"🗑️ **ꜰɪʟᴇꜱ ᴅᴇʟᴇᴛᴇᴅ:** `{files_deleted}`\n"
+                f"🗃️ **ᴅᴀᴛᴀʙᴀꜱᴇ ʀᴇꜱᴇᴛ:** `{db_reset}`\n"
+                f"🕒 **ᴛɪᴍᴇꜱᴛᴀᴍᴘ:** `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n\n"
+                "🔄 **ʙᴏᴛ ɪꜱ ɴᴏᴡ ʀᴇꜱᴛᴀʀᴛɪɴɢ...**"
+            )
+
+            await update.message.reply_text(restart_message, parse_mode="Markdown")
+
+            # ʀᴇꜱᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ
+            await self._ᴠɪꜱʜᴀʟ_ʀᴇꜱᴛᴀʀᴛ_ʙᴏᴛ()
+
+        except Exception as e:
+            error_message = f"❌ **ʀᴇꜱᴛᴀʀᴛ ꜰᴀɪʟᴇᴅ:** `{str(e)}`"
+            await update.message.reply_text(error_message, parse_mode="Markdown")
+            logger.error(f"ʀᴇꜱᴛᴀʀᴛ ꜰᴀɪʟᴇᴅ: {e}")
+
+    def _ᴠɪꜱʜᴀʟ_ᴄʟᴇᴀɴ_ᴜᴘ_ꜰɪʟᴇꜱ(self) -> int:
+        """ᴅᴇʟᴇᴛᴇ ᴀʟʟ ꜱᴀᴠᴇᴅ ꜰɪʟᴇꜱ ᴀɴᴅ ʀᴇᴛᴜʀɴ ᴄᴏᴜɴᴛ"""
         files_deleted = 0
         try:
+            # ʟɪꜱᴛ ᴏꜰ ꜰɪʟᴇꜱ ᴛᴏ ᴅᴇʟᴇᴛᴇ
             files_to_delete = [
-                "/tmp/cloudways_bot.db",
-                "/tmp/cloudways_bot.log"
+                "cloudways_bot.db",
+                "cloudways_bot.log",
+                "bot_session.txt",
+                "cloudways_bot.db",
+                "cloudways_bot",
+                "user_data.json",
+                "accounts_backup.json"
             ]
-            
+
             for file_name in files_to_delete:
                 if os.path.exists(file_name):
                     os.remove(file_name)
                     files_deleted += 1
-                    logger.info(f"🗑️ Deleted file: {file_name}")
-                    
+                    logger.info(f"🗑️ ᴅᴇʟᴇᴛᴇᴅ ꜰɪʟᴇ: {file_name}")
+
+            # ᴀʟꜱᴏ ᴅᴇʟᴇᴛᴇ ᴀɴʏ .db ꜰɪʟᴇꜱ
+            for file in os.listdir("."):
+                if file.endswith(".db") and os.path.isfile(file):
+                    os.remove(file)
+                    files_deleted += 1
+                    logger.info(f"🗑️ ᴅᴇʟᴇᴛᴇᴅ ᴅᴀᴛᴀʙᴀꜱᴇ: {file}")
+
         except Exception as e:
-            logger.error(f"Error cleaning files: {e}")
-            
+            logger.error(f"ᴇʀʀᴏʀ ᴄʟᴇᴀɴɪɴɢ ꜰɪʟᴇꜱ: {e}")
+
         return files_deleted
 
+    def _ᴠɪꜱʜᴀʟ_ʀᴇꜱᴇᴛ_ᴅᴀᴛᴀʙᴀꜱᴇ(self) -> bool:
+        """ʀᴇꜱᴇᴛ ᴅᴀᴛᴀʙᴀꜱᴇ ᴛᴏ ɪɴɪᴛɪᴀʟ ꜱᴛᴀᴛᴇ"""
+        try:
+            conn = self._ᴠɪꜱʜᴀʟ_ᴄᴏɴɴᴇᴄᴛ()
+            cur = conn.cursor()
+            
+            # ᴅʀᴏᴘ ᴀʟʟ ᴛᴀʙʟᴇꜱ
+            cur.execute("DROP TABLE IF EXISTS users")
+            cur.execute("DROP TABLE IF EXISTS accounts")
+            
+            # ʀᴇᴄʀᴇᴀᴛᴇ ᴛᴀʙʟᴇꜱ
+            self._ᴠɪꜱʜᴀʟ_ᴇɴꜱᴜʀᴇ_ᴅʙ()
+            
+            conn.commit()
+            conn.close()
+            
+            logger.info("🗃️ ᴅᴀᴛᴀʙᴀꜱᴇ ʀᴇꜱᴇᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ")
+            return True
+            
+        except Exception as e:
+            logger.error(f"ᴇʀʀᴏʀ ʀᴇꜱᴇᴛᴛɪɴɢ ᴅᴀᴛᴀʙᴀꜱᴇ: {e}")
+            return False
+
+    async def _ᴠɪꜱʜᴀʟ_ʀᴇꜱᴛᴀʀᴛ_ʙᴏᴛ(self):
+        """ʀᴇꜱᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ"""
+        try:
+            logger.info("🔄 ʀᴇꜱᴛᴀʀᴛɪɴɢ ʙᴏᴛ...")
+            
+            # ɢᴇᴛ ᴄᴜʀʀᴇɴᴛ ꜱᴄʀɪᴘᴛ ᴘᴀᴛʜ
+            script_path = sys.argv[0]
+            
+            # ᴡᴀɪᴛ ᴀ ʙɪᴛ ʙᴇꜰᴏʀᴇ ʀᴇꜱᴛᴀʀᴛɪɴɢ
+            await asyncio.sleep(2)
+            
+            # ʀᴇꜱᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ
+            os.execv(sys.executable, ['python'] + sys.argv)
+            
+        except Exception as e:
+            logger.error(f"❌ ꜰᴀɪʟᴇᴅ ᴛᴏ ʀᴇꜱᴛᴀʀᴛ ʙᴏᴛ: {e}")
+            # ꜰᴀʟʟʙᴀᴄᴋ: ᴇxɪᴛ ᴀɴᴅ ʀᴇʟʏ ᴏɴ ᴇxᴛᴇʀɴᴀʟ ʀᴇꜱᴛᴀʀᴛ
+            sys.exit(1)
+
     # ---------------------------
-    # Channel Membership Check
+    # ᴄʜᴀɴɴᴇʟ ᴍᴇᴍʙᴇʀꜱʜɪᴘ ᴄʜᴇᴄᴋ
     # ---------------------------
-    def _check_channel_membership(self, user_id: int, context: CallbackContext) -> bool:
+    async def _ᴠɪꜱʜᴀʟ_ᴄʜᴇᴄᴋ_ᴄʜᴀɴɴᴇʟ_ᴍᴇᴍʙᴇʀꜱʜɪᴘ(self, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
         try:
             for channel in REQUIRED_CHANNELS:
-                member = context.bot.get_chat_member(channel, user_id)
+                member = await context.bot.get_chat_member(channel, user_id)
                 if member.status not in ['member', 'administrator', 'creator']:
                     return False
             return True
@@ -156,20 +226,20 @@ class CloudwaysBot:
             return False
 
     # ---------------------------
-    # Broadcast Command
+    # ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴄᴏᴍᴍᴀɴᴅ
     # ---------------------------
-    def cmd_broadcast(self, update: Update, context: CallbackContext):
+    async def ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ʙʀᴏᴀᴅᴄᴀꜱᴛ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         if user_id not in ADMIN_IDS:
-            update.message.reply_text("❌ Unauthorized.")
+            await update.message.reply_text("❌ ᴜɴᴀᴜᴛʜᴏʀɪᴢᴇᴅ.")
             return
             
         if not context.args:
-            update.message.reply_text("📝 Usage: /broadcast your message here")
+            await update.message.reply_text("📝 Usage: /broadcast your message here")
             return
             
         message = " ".join(context.args)
-        conn = self._connect()
+        conn = self._ᴠɪꜱʜᴀʟ_ᴄᴏɴɴᴇᴄᴛ()
         cur = conn.cursor()
         cur.execute("SELECT user_id FROM users")
         users = cur.fetchall()
@@ -180,32 +250,32 @@ class CloudwaysBot:
         
         for user in users:
             try:
-                context.bot.send_message(
+                await context.bot.send_message(
                     chat_id=user["user_id"],
                     text=f"📢 **Broadcast** 📢\n\n{message}"
                 )
                 success += 1
             except Exception:
                 failed += 1
-            time.sleep(0.1)
+            await asyncio.sleep(0.1)
             
-        update.message.reply_text(f"📨 Broadcast results:\n✅ Success: {success}\n❌ Failed: {failed}")
+        await update.message.reply_text(f"📨 Broadcast results:\n✅ Success: {success}\n❌ Failed: {failed}")
 
     # ---------------------------
-    # User & Credits Management
+    # ᴜꜱᴇʀ & ᴄʀᴇᴅɪᴛꜱ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ
     # ---------------------------
-    def add_user_if_missing(self, user_id: int, username: str):
-        conn = self._connect()
+    def ᴠɪꜱʜᴀʟ_ᴀᴅᴅ_ᴜꜱᴇʀ_ɪꜰ_ᴍɪꜱꜱɪɴɢ(self, user_id: int, username: str):
+        conn = self._ᴠɪꜱʜᴀʟ_ᴄᴏɴɴᴇᴄᴛ()
         cur = conn.cursor()
         cur.execute("INSERT OR IGNORE INTO users (user_id, username, credits, used) VALUES (?, ?, ?, ?)",
                     (user_id, username, DEFAULT_CREDITS, 0))
         conn.commit()
         conn.close()
 
-    def get_credits(self, user_id: int) -> int:
+    def ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʀᴇᴅɪᴛꜱ(self, user_id: int) -> int:
         if user_id in ADMIN_IDS:
             return 99999999
-        conn = self._connect()
+        conn = self._ᴠɪꜱʜᴀʟ_ᴄᴏɴɴᴇᴄᴛ()
         cur = conn.cursor()
         cur.execute("SELECT credits, used FROM users WHERE user_id=?", (user_id,))
         row = cur.fetchone()
@@ -214,10 +284,10 @@ class CloudwaysBot:
             return 0
         return max(0, row["credits"] - row["used"])
 
-    def try_consume_credit(self, user_id: int, amount: int = 1) -> bool:
+    def ᴠɪꜱʜᴀʟ_ᴛʀʏ_ᴄᴏɴꜱᴜᴍᴇ_ᴄʀᴇᴅɪᴛ(self, user_id: int, amount: int = 1) -> bool:
         if user_id in ADMIN_IDS:
             return True
-        conn = self._connect()
+        conn = self._ᴠɪꜱʜᴀʟ_ᴄᴏɴɴᴇᴄᴛ()
         cur = conn.cursor()
         cur.execute("""
             UPDATE users
@@ -229,18 +299,18 @@ class CloudwaysBot:
         conn.close()
         return updated
 
-    def refund_credit(self, user_id: int, amount: int = 1):
-        conn = self._connect()
+    def ᴠɪꜱʜᴀʟ_ʀᴇꜰᴜɴᴅ_ᴄʀᴇᴅɪᴛ(self, user_id: int, amount: int = 1):
+        conn = self._ᴠɪꜱʜᴀʟ_ᴄᴏɴɴᴇᴄᴛ()
         cur = conn.cursor()
         cur.execute("UPDATE users SET used = used - ? WHERE user_id = ?", (amount, user_id))
         conn.commit()
         conn.close()
 
     # ---------------------------
-    # Account Persistence
+    # ᴀᴄᴄᴏᴜɴᴛ ᴘᴇʀꜱɪꜱᴛᴇɴᴄᴇ
     # ---------------------------
-    def save_account(self, user_id: int, details: Dict[str, Any], result: Dict[str, Any], cloudways_response: str = ""):
-        conn = self._connect()
+    def ᴠɪꜱʜᴀʟ_ꜱᴀᴠᴇ_ᴀᴄᴄᴏᴜɴᴛ(self, user_id: int, details: Dict[str, Any], result: Dict[str, Any], cloudways_response: str = ""):
+        conn = self._ᴠɪꜱʜᴀʟ_ᴄᴏɴɴᴇᴄᴛ()
         cur = conn.cursor()
         cur.execute('''
             INSERT INTO accounts (email, password, first_name, last_name, status, risk_score, verification_sent, user_id, cloudways_response)
@@ -260,9 +330,9 @@ class CloudwaysBot:
         conn.close()
 
     # ---------------------------
-    # Random User Generator
+    # ʀᴀɴᴅᴏᴍ ᴜꜱᴇʀ ɢᴇɴᴇʀᴀᴛᴏʀ
     # ---------------------------
-    def random_user_details(self, email: str):
+    def ᴠɪꜱʜᴀʟ_ʀᴀɴᴅᴏᴍ_ᴜꜱᴇʀ_ᴅᴇᴛᴀɪʟꜱ(self, email: str):
         try:
             r = requests.get("https://randomuser.me/api/?nat=us", timeout=8)
             r.raise_for_status()
@@ -270,21 +340,21 @@ class CloudwaysBot:
             first = data["first"].capitalize()
             last = data["last"].capitalize()
         except Exception:
-            first = random.choice(["John", "Vishal", "Raj", "Mike", "Alex", "David", "Sarah", "Emma"])
+            first = random.choice(["John", "Vishalpapa", "Rajpapa", "Mike", "Alex", "David", "Sarah", "Emma"])
             last = random.choice(["Smith", "Brown", "Jones", "Patel", "Kumar"])
         
-        password_base = random.choice(["Vishal", "Raj"])
+        password_base = random.choice(["Vishal", "Rajowner"])
         password = f"{password_base}@{random.randint(1000,9999)}"
         
         return {"first_name": first, "last_name": last, "email": email, "password": password}
 
     # ---------------------------
-    # Advanced Device Fingerprint
+    # ᴀᴅᴠᴀɴᴄᴇᴅ ᴅᴇᴠɪᴄᴇ ꜰɪɴɢᴇʀᴘʀɪɴᴛ
     # ---------------------------
-    def device_fingerprint(self):
+    def ᴠɪꜱʜᴀʟ_ᴅᴇᴠɪᴄᴇ_ꜰɪɴɢᴇʀᴘʀɪɴᴛ(self):
         device_id = str(uuid.uuid4())
         
-        # Advanced device data
+        # ᴀᴅᴠᴀɴᴄᴇᴅ ᴛᴀʟᴏɴ ᴅᴀᴛᴀ
         talon = {
             "device_id": ''.join(random.choices(string.ascii_lowercase + string.digits, k=16)),
             "session_id": str(uuid.uuid4()),
@@ -319,15 +389,15 @@ class CloudwaysBot:
         return device_id, talon
 
     # ---------------------------
-    # Signup Request (Blocking)
+    # ꜱɪɢɴᴜᴘ ʀᴇQᴜᴇꜱᴛ (ʙʟᴏᴄᴋɪɴɢ)
     # ---------------------------
-    def _signup_request_blocking(self, details: Dict[str, str]) -> Dict[str, Any]:
+    def _ᴠɪꜱʜᴀʟ_ꜱɪɢɴᴜᴘ_ʀᴇQᴜᴇꜱᴛ_ʙʟᴏᴄᴋɪɴɢ(self, details: Dict[str, str]) -> Dict[str, Any]:
         """
-        Perform a blocking HTTP POST to Cloudways signup endpoint.
-        Returns parsed JSON or an error dict.
+        ᴘᴇʀꜰᴏʀᴍ ᴀ ʙʟᴏᴄᴋɪɴɢ ʜᴛᴛᴘ ᴘᴏꜱᴛ ᴛᴏ ᴄʟᴏᴜᴅᴡᴀʏꜱ ꜱɪɢɴᴜᴘ ᴇɴᴅᴘᴏɪɴᴛ.
+        ʀᴇᴛᴜʀɴꜱ ᴘᴀʀꜱᴇᴅ ᴊꜱᴏɴ ᴏʀ ᴀɴ ᴇʀʀᴏʀ ᴅɪᴄᴛ.
         """
         try:
-            device_id, talon = self.device_fingerprint()
+            device_id, talon = self.ᴠɪꜱʜᴀʟ_ᴅᴇᴠɪᴄᴇ_ꜰɪɴɢᴇʀᴘʀɪɴᴛ()
             payload = {
                 "first_name": details["first_name"],
                 "last_name": details["last_name"],
@@ -355,13 +425,14 @@ class CloudwaysBot:
         except Exception as e:
             return {"success": False, "error": str(e), "status_code": 0}
 
-    def signup_request(self, details):
-        return self._signup_request_blocking(details)
+    @ᴠɪꜱʜᴀʟ_ʀᴜɴ_ʙʟᴏᴄᴋɪɴɢ
+    def ᴠɪꜱʜᴀʟ_ꜱɪɢɴᴜᴘ_ʀᴇQᴜᴇꜱᴛ(self, details):
+        return self._ᴠɪꜱʜᴀʟ_ꜱɪɢɴᴜᴘ_ʀᴇQᴜᴇꜱᴛ_ʙʟᴏᴄᴋɪɴɢ(details)
 
     # ---------------------------
-    # Parse Result
+    # ᴘᴀʀꜱᴇ ʀᴇꜱᴜʟᴛ - ENHANCED VERSION
     # ---------------------------
-    def parse_signup_result(self, resp: Dict[str, Any]) -> Dict[str, Any]:
+    def ᴠɪꜱʜᴀʟ_ᴘᴀʀꜱᴇ_ꜱɪɢɴᴜᴘ_ʀᴇꜱᴜʟᴛ(self, resp: Dict[str, Any]) -> Dict[str, Any]:
         try:
             if not resp.get("success"):
                 return {
@@ -400,11 +471,11 @@ class CloudwaysBot:
                 risk_score = user_data.get("risk_score", 0) or cloudways_data.get("risk_score", 0) or 0
                 message = cloudways_data.get("message", "") or ""
                 
-                # Risk score check - 100 or above is considered high risk
+                # ʀɪꜱᴋ ꜱᴄᴏʀᴇ ᴄʜᴇᴄᴋ - 100 ᴏʀ ᴀʙᴏᴠᴇ ɪꜱ ᴄᴏɴꜱɪᴅᴇʀᴇᴅ ʜɪɢʜ ʀɪꜱᴋ
                 if risk_score >= 100:
                     return {
                         "success": False,
-                        "status": f"High risk score ({risk_score}) - {status_message}",
+                        "status": f"ʜɪɢʜ ʀɪꜱᴋ ꜱᴄᴏʀᴇ ({risk_score}) - {status_message}",
                         "risk_score": risk_score,
                         "verification_sent": False,
                         "cloudways_response": cloudways_data,
@@ -450,43 +521,43 @@ class CloudwaysBot:
             }
 
     # ---------------------------
-    # Get Cloudways Response Text
+    # ɢᴇᴛ ᴄʟᴏᴜᴅᴡᴀʏꜱ ᴏʀɪɢɪɴᴀʟ ʀᴇꜱᴘᴏɴꜱᴇ ᴛᴇxᴛ - ENHANCED VERSION
     # ---------------------------
-    def get_cloudways_response_text(self, cloudways_response: Dict[str, Any]) -> str:
-        """Extract readable text from Cloudways response"""
+    def ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʟᴏᴜᴅᴡᴀʏꜱ_ʀᴇꜱᴘᴏɴꜱᴇ_ᴛᴇxᴛ(self, cloudways_response: Dict[str, Any]) -> str:
+        """ᴇxᴛʀᴀᴄᴛ ʀᴇᴀᴅᴀʙʟᴇ ᴛᴇxᴛ ꜰʀᴏᴍ ᴄʟᴏᴜᴅᴡᴀʏꜱ ʀᴇꜱᴘᴏɴꜱᴇ"""
         try:
             if not cloudways_response:
-                return "No response data"
+                return "ɴᴏ ʀᴇꜱᴘᴏɴꜱᴇ ᴅᴀᴛᴀ"
             
             response_parts = []
             
             # Check main response fields
             if cloudways_response.get("error"):
-                response_parts.append(f"❌ Error: {cloudways_response.get('error')}")
+                response_parts.append(f"❌ ᴇʀʀᴏʀ: {cloudways_response.get('error')}")
             
             if cloudways_response.get("message"):
-                response_parts.append(f"📝 Message: {cloudways_response.get('message')}")
+                response_parts.append(f"📝 ᴍᴇꜱꜱᴀɢᴇ: {cloudways_response.get('message')}")
             
             if cloudways_response.get("status"):
-                response_parts.append(f"📊 Status: {cloudways_response.get('status')}")
+                response_parts.append(f"📊 ꜱᴛᴀᴛᴜꜱ: {cloudways_response.get('status')}")
             
             # Check data section
             data_section = cloudways_response.get("data", {})
             if data_section:
                 if data_section.get("message"):
-                    response_parts.append(f"📦 Data Message: {data_section.get('message')}")
+                    response_parts.append(f"📦 ᴅᴀᴛᴀ ᴍᴇꜱꜱᴀɢᴇ: {data_section.get('message')}")
                 
                 if data_section.get("error"):
-                    response_parts.append(f"🚫 Data Error: {data_section.get('error')}")
+                    response_parts.append(f"🚫 ᴅᴀᴛᴀ ᴇʀʀᴏʀ: {data_section.get('error')}")
                 
                 user_data = data_section.get("user", {})
                 if user_data and isinstance(user_data, dict):
                     if user_data.get("risk_score") is not None:
-                        response_parts.append(f"🎯 Risk Score: {user_data.get('risk_score')}")
+                        response_parts.append(f"🎯 ʀɪꜱᴋ ꜱᴄᴏʀᴇ: {user_data.get('risk_score')}")
                     if user_data.get("status"):
-                        response_parts.append(f"👤 User Status: {user_data.get('status')}")
+                        response_parts.append(f"👤 ᴜꜱᴇʀ ꜱᴛᴀᴛᴜꜱ: {user_data.get('status')}")
                     if user_data.get("email"):
-                        response_parts.append(f"📧 User Email: {user_data.get('email')}")
+                        response_parts.append(f"📧 ᴜꜱᴇʀ ᴇᴍᴀɪʟ: {user_data.get('email')}")
             
             # If no specific messages found, show raw response for debugging
             if not response_parts:
@@ -496,195 +567,220 @@ class CloudwaysBot:
             return "\n".join(response_parts)
             
         except Exception as e:
-            return f"Error parsing response: {str(e)}"
+            return f"ᴇʀʀᴏʀ ᴘᴀʀꜱɪɴɢ ʀᴇꜱᴘᴏɴꜱᴇ: {str(e)}"
 
     # ---------------------------
-    # Mass Create Function - SIMPLIFIED VERSION
+    # ᴍᴀꜱꜱ ᴄʀᴇᴀᴛᴇ ꜰᴜɴᴄᴛɪᴏɴ
     # ---------------------------
-    def cmd_mass(self, update: Update, context: CallbackContext):
+    async def ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ᴍᴀꜱꜱ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         username = update.effective_user.username or update.effective_user.first_name or "User"
         
-        if not self._check_channel_membership(user_id, context):
-            update.message.reply_text("❌ **Please join all required Telegram channels first to use this bot.**")
+        if not await self._ᴠɪꜱʜᴀʟ_ᴄʜᴇᴄᴋ_ᴄʜᴀɴɴᴇʟ_ᴍᴇᴍʙᴇʀꜱʜɪᴘ(user_id, context):
+            await update.message.reply_text("❌ **ᴘʟᴇᴀꜱᴇ ᴊᴏɪɴ ᴀʟʟ ʀᴇQᴜɪʀᴇᴅ ᴛᴇʟᴇɢʀᴀᴍ ᴄʜᴀɴɴᴇʟꜱ ꜰɪʀꜱᴛ ᴛᴏ ᴜꜱᴇ ᴛʜɪꜱ ʙᴏᴛ.**")
             return
             
-        self.add_user_if_missing(user_id, username)
+        self.ᴠɪꜱʜᴀʟ_ᴀᴅᴅ_ᴜꜱᴇʀ_ɪꜰ_ᴍɪꜱꜱɪɴɢ(user_id, username)
 
         if not context.args:
-            update.message.reply_text("📝 **Usage:** `/mass email1.com email2.com email3.com ...`", parse_mode="Markdown")
+            await update.message.reply_text("📝 **ᴜꜱᴀɢᴇ:** `/mass email1.com email2.com email3.com ...`", parse_mode="Markdown")
             return
 
         emails = [email.strip() for email in context.args if "@" in email and "." in email.split("@")[-1]]
         
         if not emails:
-            update.message.reply_text("❌ **No valid email addresses provided.**")
+            await update.message.reply_text("❌ **ɴᴏ ᴠᴀʟɪᴅ ᴇᴍᴀɪʟ ᴀᴅᴅʀᴇꜱꜱᴇꜱ ᴘʀᴏᴠɪᴅᴇᴅ.**")
             return
 
-        available_credits = self.get_credits(user_id)
+        available_credits = self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʀᴇᴅɪᴛꜱ(user_id)
         if available_credits < len(emails):
-            update.message.reply_text(f"❌ **Insufficient credits.** You have `{available_credits}` credits but requested `{len(emails)}` accounts.", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ **ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴄʀᴇᴅɪᴛꜱ.** ʏᴏᴜ ʜᴀᴠᴇ `{available_credits}` ᴄʀᴇᴅɪᴛꜱ ʙᴜᴛ ʀᴇQᴜᴇꜱᴛᴇᴅ `{len(emails)}` ᴀᴄᴄᴏᴜɴᴛꜱ.", parse_mode="Markdown")
             return
 
-        if not self.try_consume_credit(user_id, len(emails)):
-            update.message.reply_text("💳 **No credits left. Please contact admin.**")
+        if not self.ᴠɪꜱʜᴀʟ_ᴛʀʏ_ᴄᴏɴꜱᴜᴍᴇ_ᴄʀᴇᴅɪᴛ(user_id, len(emails)):
+            await update.message.reply_text("💳 **ɴᴏ ᴄʀᴇᴅɪᴛꜱ ʟᴇꜰᴛ. ᴘʟᴇᴀꜱᴇ ᴄᴏɴᴛᴀᴄᴛ ᴀᴅᴍɪɴ.**")
             return
 
-        progress_msg = update.message.reply_text(f"🚀 **Starting mass creation for {len(emails)} accounts...**")
+        progress_msg = await update.message.reply_text(f"🚀 **ꜱᴛᴀʀᴛɪɴɢ ᴍᴀꜱꜱ ᴄʀᴇᴀᴛɪᴏɴ ꜰᴏʀ {len(emails)} ᴀᴄᴄᴏᴜɴᴛꜱ...**")
         
         success_count = 0
         failed_count = 0
+        results = []
 
         for i, email in enumerate(emails, 1):
             try:
-                context.bot.edit_message_text(
-                    chat_id=update.effective_chat.id,
-                    message_id=progress_msg.message_id,
-                    text=f"🔄 **Processing {i}/{len(emails)}: {email}**"
-                )
+                await progress_msg.edit_text(f"🔄 **ᴘʀᴏᴄᴇꜱꜱɪɴɢ {i}/{len(emails)}: {email}**")
                 
-                details = self.random_user_details(email)
-                resp = self.signup_request(details)
-                result = self.parse_signup_result(resp)
+                details = self.ᴠɪꜱʜᴀʟ_ʀᴀɴᴅᴏᴍ_ᴜꜱᴇʀ_ᴅᴇᴛᴀɪʟꜱ(email)
+                resp = await self.ᴠɪꜱʜᴀʟ_ꜱɪɢɴᴜᴘ_ʀᴇQᴜᴇꜱᴛ(details)
+                result = self.ᴠɪꜱʜᴀʟ_ᴘᴀʀꜱᴇ_ꜱɪɢɴᴜᴘ_ʀᴇꜱᴜʟᴛ(resp)
                 
-                # Save account with Cloudways response
+                # ꜱᴀᴠᴇ ᴀᴄᴄᴏᴜɴᴛ ᴡɪᴛʜ ᴄʟᴏᴜᴅᴡᴀʏꜱ ʀᴇꜱᴘᴏɴꜱᴇ
                 cloudways_response_json = json.dumps(resp.get("data", {}) if resp.get("success") else resp)
-                self.save_account(user_id, details, result, cloudways_response_json)
+                self.ᴠɪꜱʜᴀʟ_ꜱᴀᴠᴇ_ᴀᴄᴄᴏᴜɴᴛ(user_id, details, result, cloudways_response_json)
                 
                 risk_score = result.get("risk_score", 0)
 
                 if result.get("success") and risk_score < 100 and risk_score > 0:
                     success_count += 1
+                    results.append(f"✅ **ꜱᴜᴄᴄᴇꜱꜱ:** {email} | ʀɪꜱᴋ: {risk_score}")
                 else:
                     failed_count += 1
+                    cloudways_text = self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʟᴏᴜᴅᴡᴀʏꜱ_ʀᴇꜱᴘᴏɴꜱᴇ_ᴛᴇxᴛ(result.get("cloudways_response", {}))
+                    if risk_score >= 100:
+                        results.append(f"❌ **ʜɪɢʜ ʀɪꜱᴋ:** {email} | ʀɪꜱᴋ: {risk_score} | {cloudways_text}")
+                    else:
+                        results.append(f"❌ **ꜰᴀɪʟᴇᴅ:** {email} | {cloudways_text}")
 
-                time.sleep(2)  # Rate limiting
+                await asyncio.sleep(2)  # ʀᴀᴛᴇ ʟɪᴍɪᴛɪɴɢ
 
             except Exception as e:
                 failed_count += 1
+                results.append(f"❌ **ᴇʀʀᴏʀ:** {email} | {str(e)}")
                 continue
 
-        # Send final report
+        # ꜱᴇɴᴅ ꜰɪɴᴀʟ ʀᴇᴘᴏʀᴛ
         report = (
             "═══════════════════════════════\n"
-            "        🎯 **Mass Creation Report** 🎯\n"
+            "        🎯 **ᴍᴀꜱꜱ ᴄʀᴇᴀᴛɪᴏɴ ʀᴇᴘᴏʀᴛ** 🎯\n"
             "═══════════════════════════════\n\n"
-            f"📧 **Total Emails:** `{len(emails)}`\n"
-            f"✅ **Successful:** `{success_count}`\n"
-            f"❌ **Failed:** `{failed_count}`\n"
-            f"💎 **Remaining Credits:** `{self.get_credits(user_id)}`\n\n"
-            "═══════════════════════════════"
+            f"📧 **ᴛᴏᴛᴀʟ ᴇᴍᴀɪʟꜱ:** `{len(emails)}`\n"
+            f"✅ **ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ:** `{success_count}`\n"
+            f"❌ **ꜰᴀɪʟᴇᴅ:** `{failed_count}`\n"
+            f"💎 **ʀᴇᴍᴀɪɴɪɴɢ ᴄʀᴇᴅɪᴛꜱ:** `{self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʀᴇᴅɪᴛꜱ(user_id)}`\n\n"
+            "───────────────────────────────\n"
+            "📋 **ᴅᴇᴛᴀɪʟᴇᴅ ʀᴇꜱᴜʟᴛꜱ:**\n"
         )
         
-        context.bot.delete_message(
-            chat_id=update.effective_chat.id,
-            message_id=progress_msg.message_id
-        )
-        update.message.reply_text(report, parse_mode="Markdown")
+        # ꜱᴘʟɪᴛ ʀᴇꜱᴜʟᴛꜱ ɪꜰ ᴛᴏᴏ ʟᴏɴɢ ꜰᴏʀ ᴛᴇʟᴇɢʀᴀᴍ ᴍᴇꜱꜱᴀɢᴇ
+        results_text = "\n".join(results)
+        if len(report + results_text) > 4000:
+            results_text = "\n".join(results[:15]) + f"\n\n... ᴀɴᴅ {len(results) - 15} ᴍᴏʀᴇ ʀᴇꜱᴜʟᴛꜱ"
+        
+        final_message = report + results_text + "\n\n═══════════════════════════════"
+        
+        await progress_msg.delete()
+        await update.message.reply_text(final_message, parse_mode="Markdown")
+
+        # ꜱᴇɴᴅ ᴀᴅᴍɪɴ ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴ
+        if success_count > 0:
+            admin_message = (
+                "📬 **ᴍᴀꜱꜱ ᴄʀᴇᴀᴛɪᴏɴ ᴄᴏᴍᴘʟᴇᴛᴇᴅ** 📬\n\n"
+                f"👤 **ᴜꜱᴇʀ:** {username} ({user_id})\n"
+                f"📧 **ᴛᴏᴛᴀʟ:** {len(emails)} ᴇᴍᴀɪʟꜱ\n"
+                f"✅ **ꜱᴜᴄᴄᴇꜱꜱ:** {success_count}\n"
+                f"❌ **ꜰᴀɪʟᴇᴅ:** {failed_count}\n"
+                f"💎 **ᴄʀᴇᴅɪᴛꜱ ᴜꜱᴇᴅ:** {len(emails)}"
+            )
+            for admin_id in ADMIN_IDS:
+                try:
+                    await context.bot.send_message(admin_id, admin_message, parse_mode="Markdown")
+                except Exception:
+                    pass
 
     # ---------------------------
-    # Telegram Command Handlers
+    # ᴛᴇʟᴇɢʀᴀᴍ ᴄᴏᴍᴍᴀɴᴅ ʜᴀɴᴅʟᴇʀꜱ
     # ---------------------------
-    def cmd_start(self, update: Update, context: CallbackContext):
+    async def ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ꜱᴛᴀʀᴛ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         username = update.effective_user.username or update.effective_user.first_name or "User"
-        self.add_user_if_missing(user_id, username)
+        self.ᴠɪꜱʜᴀʟ_ᴀᴅᴅ_ᴜꜱᴇʀ_ɪꜰ_ᴍɪꜱꜱɪɴɢ(user_id, username)
         
-        if not self._check_channel_membership(user_id, context):
+        if not await self._ᴠɪꜱʜᴀʟ_ᴄʜᴇᴄᴋ_ᴄʜᴀɴɴᴇʟ_ᴍᴇᴍʙᴇʀꜱʜɪᴘ(user_id, context):
             keyboard = [
-                [InlineKeyboardButton("💌 Join Channel 1", url=f"https://t.me/{REQUIRED_CHANNELS[0][1:]}")],
-                [InlineKeyboardButton("💌 Join Channel 2", url=f"https://t.me/{REQUIRED_CHANNELS[1][1:]}")],
-                [InlineKeyboardButton("✅ I've Joined", callback_data="check_join")]
+                [InlineKeyboardButton("💌 ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ 1", url=f"https://t.me/{REQUIRED_CHANNELS[0][1:]}")],
+                [InlineKeyboardButton("💌 ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ 2", url=f"https://t.me/{REQUIRED_CHANNELS[1][1:]}")],
+                [InlineKeyboardButton("✅ ɪ'ᴠᴇ ᴊᴏɪɴᴇᴅ", callback_data="check_join")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            update.message.reply_text(
+            await update.message.reply_text(
                 "══════════════════════════\n"
-                "✨ **Welcome to Cloudways Bot!** ✨\n"
+                "✨ **ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴄʟᴏᴜᴅᴡᴀʏꜱ ʙᴏᴛ!** ✨\n"
                 "══════════════════════════\n\n"
-                f"👤 **User:** @{username}\n"
-                f"🆔 **ID:** `{user_id}`\n"
-                f"💎 **Available Credits:** `{self.get_credits(user_id)}`\n\n"
-                "🔒 **To use this bot, please join our Telegram channels first.**\n"
+                f"👤 **ᴜꜱᴇʀ:** @{username}\n"
+                f"🆔 **ɪᴅ:** `{user_id}`\n"
+                f"💎 **ᴀᴠᴀɪʟᴀʙʟᴇ ᴄʀᴇᴅɪᴛꜱ:** `{self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʀᴇᴅɪᴛꜱ(user_id)}`\n\n"
+                "🔒 **ᴛᴏ ᴜꜱᴇ ᴛʜɪꜱ ʙᴏᴛ, ᴘʟᴇᴀꜱᴇ ᴊᴏɪɴ ᴏᴜʀ ᴛᴇʟᴇɢʀᴀᴍ ᴄʜᴀɴɴᴇʟꜱ ꜰɪʀꜱᴛ.**\n"
                 "────────────────────────\n"
-                "🍅 Owners = @VishalxAlone | @RAJOWNER20\n"
+                "🍅 ᴏᴡɴᴇʀꜱ = @VishalxAlone | @RAJOWNER20\n"
                 "────────────────────────",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
             return
 
-        update.message.reply_text(
-            "👋 **Welcome to Cloudways Bot!** 👋\n\n"
-            f"👤 **User:** @{username}\n"
-            f"🆔 **ID:** `{user_id}`\n"
-            f"💎 **Available Credits:** `{self.get_credits(user_id)}`\n\n"
-            "🔧 **Available Commands:**\n"
+        await update.message.reply_text(
+            "👋 **ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴄʟᴏᴜᴅᴡᴀʏꜱ ʙᴏᴛ!** 👋\n\n"
+            f"👤 **ᴜꜱᴇʀ:** @{username}\n"
+            f"🆔 **ɪᴅ:** `{user_id}`\n"
+            f"💎 **ᴀᴠᴀɪʟᴀʙʟᴇ ᴄʀᴇᴅɪᴛꜱ:** `{self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʀᴇᴅɪᴛꜱ(user_id)}`\n\n"
+            "🔧 **ᴀᴠᴀɪʟᴀʙʟᴇ ᴄᴏᴍᴍᴀɴᴅꜱ:**\n"
             "├──────────────────────\n"
             "│ 💼 `/create email@example.com` \n"
             "│ 🚀 `/mass email1.com email2.com ...`\n"
-            "│ 💰 `/credits` → Check your credits\n"
-            "│ 📊 `/stats` → Bot statistics (admin)\n"
-            "│ 🔧 `/debug email@example.com` → Debug API (admin)\n"
-            "│ ♻️ `/restart` → Restart bot & clean data (admin)\n"
+            "│ 💰 `/credits` → ᴄʜᴇᴄᴋ ʏᴏᴜʀ ᴄʀᴇᴅɪᴛꜱ\n"
+            "│ 📊 `/stats` → ʙᴏᴛ ꜱᴛᴀᴛɪꜱᴛɪᴄꜱ (ᴀᴅᴍɪɴ)\n"
+            "│ 🔧 `/debug email@example.com` → ᴅᴇʙᴜɢ ᴀᴘɪ (ᴀᴅᴍɪɴ)\n"
+            "│ ♻️ `/restart` → ʀᴇꜱᴛᴀʀᴛ ʙᴏᴛ & ᴄʟᴇᴀɴ ᴅᴀᴛᴀ (ᴀᴅᴍɪɴ)\n"
             "└──────────────────────\n\n"
             "───────────────────────\n"
-            "🍅 Owners = @VishalxAlone | @RAJOWNER20\n"
+            "🍅 ᴏᴡɴᴇʀꜱ = @VishalxAlone | @RAJOWNER20\n"
             "───────────────────────",
             parse_mode="Markdown"
         )
 
-    def handle_callback(self, update: Update, context: CallbackContext):
+    async def ᴠɪꜱʜᴀʟ_ʜᴀɴᴅʟᴇ_ᴄᴀʟʟʙᴀᴄᴋ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
-        query.answer()
+        await query.answer()
         
         if query.data == "check_join":
             user_id = query.from_user.id
-            if self._check_channel_membership(user_id, context):
-                query.edit_message_text(
-                    "✅ **You have successfully joined all channels!**\n\n"
-                    f"💎 **Available Credits:** `{self.get_credits(user_id)}`\n\n"
-                    "📧 **Start creating:** `/create email@example.com`\n"
-                    "🚀 **Mass create:** `/mass email1.com email2.com ...`\n"
-                    "🔍 **Check credits:** `/credits`",
+            if await self._ᴠɪꜱʜᴀʟ_ᴄʜᴇᴄᴋ_ᴄʜᴀɴɴᴇʟ_ᴍᴇᴍʙᴇʀꜱʜɪᴘ(user_id, context):
+                await query.edit_message_text(
+                    "✅ **ʏᴏᴜ ʜᴀᴠᴇ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴊᴏɪɴᴇᴅ ᴀʟʟ ᴄʜᴀɴɴᴇʟꜱ!**\n\n"
+                    f"💎 **ᴀᴠᴀɪʟᴀʙʟᴇ ᴄʀᴇᴅɪᴛꜱ:** `{self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʀᴇᴅɪᴛꜱ(user_id)}`\n\n"
+                    "📧 **ꜱᴛᴀʀᴛ ᴄʀᴇᴀᴛɪɴɢ:** `/create email@example.com`\n"
+                    "🚀 **ᴍᴀꜱꜱ ᴄʀᴇᴀᴛᴇ:** `/mass email1.com email2.com ...`\n"
+                    "🔍 **ᴄʜᴇᴄᴋ ᴄʀᴇᴅɪᴛꜱ:** `/credits`",
                     parse_mode="Markdown"
                 )
             else:
                 keyboard = [
-                    [InlineKeyboardButton("💌 Join Channel 1", url=f"https://t.me/{REQUIRED_CHANNELS[0][1:]}")],
-                    [InlineKeyboardButton("💌 Join Channel 2", url=f"https://t.me/{REQUIRED_CHANNELS[1][1:]}")],
-                    [InlineKeyboardButton("✅ I've Joined", callback_data="check_join")]
+                    [InlineKeyboardButton("💌 ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ 1", url=f"https://t.me/{REQUIRED_CHANNELS[0][1:]}")],
+                    [InlineKeyboardButton("💌 ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ 2", url=f"https://t.me/{REQUIRED_CHANNELS[1][1:]}")],
+                    [InlineKeyboardButton("✅ ɪ'ᴠᴇ ᴊᴏɪɴᴇᴅ", callback_data="check_join")]
                 ]
-                query.edit_message_text(
-                    "❌ **You haven't joined all required channels yet!**\n\n"
-                    "Please join all Telegram channels to use this bot.",
+                await query.edit_message_text(
+                    "❌ **ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴀʟʟ ʀᴇQᴜɪʀᴇᴅ ᴄʜᴀɴɴᴇʟꜱ ʏᴇᴛ!**\n\n"
+                    "ᴘʟᴇᴀꜱᴇ ᴊᴏɪɴ ᴀʟʟ ᴛᴇʟᴇɢʀᴀᴍ ᴄʜᴀɴɴᴇʟꜱ ᴛᴏ ᴜꜱᴇ ᴛʜɪꜱ ʙᴏᴛ.",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
 
-    def cmd_credits(self, update: Update, context: CallbackContext):
+    async def ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ᴄʀᴇᴅɪᴛꜱ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
-        update.message.reply_text(f"💎 **Available Credits:** `{self.get_credits(user_id)}`", parse_mode="Markdown")
+        await update.message.reply_text(f"💎 **ᴀᴠᴀɪʟᴀʙʟᴇ ᴄʀᴇᴅɪᴛꜱ:** `{self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʀᴇᴅɪᴛꜱ(user_id)}`", parse_mode="Markdown")
 
     # ---------------------------
     # DEBUG COMMAND
     # ---------------------------
-    def cmd_debug(self, update: Update, context: CallbackContext):
+    async def ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ᴅᴇʙᴜɢ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Debug command to test Cloudways API directly"""
         user_id = update.effective_user.id
         if user_id not in ADMIN_IDS:
-            update.message.reply_text("❌ Unauthorized.")
+            await update.message.reply_text("❌ ᴜɴᴀᴜᴛʜᴏʀɪᴢᴇᴅ.")
             return
 
         if not context.args:
-            update.message.reply_text("Usage: /debug email@example.com")
+            await update.message.reply_text("Usage: /debug email@example.com")
             return
 
         email = context.args[0]
-        details = self.random_user_details(email)
+        details = self.ᴠɪꜱʜᴀʟ_ʀᴀɴᴅᴏᴍ_ᴜꜱᴇʀ_ᴅᴇᴛᴀɪʟꜱ(email)
         
-        update.message.reply_text(f"🔧 **Testing account creation:** `{email}`")
+        await update.message.reply_text(f"🔧 **ᴛᴇꜱᴛɪɴɢ ᴀᴄᴄᴏᴜɴᴛ ᴄʀᴇᴀᴛɪᴏɴ:** `{email}`")
         
-        resp = self.signup_request(details)
-        result = self.parse_signup_result(resp)
+        resp = await self.ᴠɪꜱʜᴀʟ_ꜱɪɢɴᴜᴘ_ʀᴇQᴜᴇꜱᴛ(details)
+        result = self.ᴠɪꜱʜᴀʟ_ᴘᴀʀꜱᴇ_ꜱɪɢɴᴜᴘ_ʀᴇꜱᴜʟᴛ(resp)
         
         debug_text = (
             f"📧 **Email:** {email}\n"
@@ -696,140 +792,141 @@ class CloudwaysBot:
             f"```json\n{json.dumps(resp, indent=2)}\n```"
         )
         
-        update.message.reply_text(debug_text, parse_mode="Markdown")
+        await update.message.reply_text(debug_text, parse_mode="Markdown")
 
-    def cmd_create(self, update: Update, context: CallbackContext):
+    async def ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ᴄʀᴇᴀᴛᴇ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         username = update.effective_user.username or update.effective_user.first_name or "User"
         
-        if not self._check_channel_membership(user_id, context):
-            update.message.reply_text("❌ **Please join all required Telegram channels first to use this bot.**")
+        if not await self._ᴠɪꜱʜᴀʟ_ᴄʜᴇᴄᴋ_ᴄʜᴀɴɴᴇʟ_ᴍᴇᴍʙᴇʀꜱʜɪᴘ(user_id, context):
+            await update.message.reply_text("❌ **ᴘʟᴇᴀꜱᴇ ᴊᴏɪɴ ᴀʟʟ ʀᴇQᴜɪʀᴇᴅ ᴛᴇʟᴇɢʀᴀᴍ ᴄʜᴀɴɴᴇʟꜱ ꜰɪʀꜱᴛ ᴛᴏ ᴜꜱᴇ ᴛʜɪꜱ ʙᴏᴛ.**")
             return
             
-        self.add_user_if_missing(user_id, username)
+        self.ᴠɪꜱʜᴀʟ_ᴀᴅᴅ_ᴜꜱᴇʀ_ɪꜰ_ᴍɪꜱꜱɪɴɢ(user_id, username)
 
         if not context.args:
-            update.message.reply_text("📝 **Usage:** `/create email@example.com`", parse_mode="Markdown")
+            await update.message.reply_text("📝 **ᴜꜱᴀɢᴇ:** `/create email@example.com`", parse_mode="Markdown")
             return
 
         email = context.args[0].strip()
         if "@" not in email or "." not in email.split("@")[-1]:
-            update.message.reply_text("❌ **Invalid email format.**")
+            await update.message.reply_text("❌ **ɪɴᴠᴀʟɪᴅ ᴇᴍᴀɪʟ ꜰᴏʀᴍᴀᴛ.**")
             return
 
-        if not self.try_consume_credit(user_id):
-            update.message.reply_text("💳 **No credits left. Please contact admin. @Its_me_Vishall**")
+        if not self.ᴠɪꜱʜᴀʟ_ᴛʀʏ_ᴄᴏɴꜱᴜᴍᴇ_ᴄʀᴇᴅɪᴛ(user_id):
+            await update.message.reply_text("💳 **ɴᴏ ᴄʀᴇᴅɪᴛꜱ ʟᴇꜰᴛ. ᴘʟᴇᴀꜱᴇ ᴄᴏɴᴛᴀᴄᴛ ᴀᴅᴍɪɴ. @Its_me_Vishall**")
             return
 
-        details = self.random_user_details(email)
+        details = self.ᴠɪꜱʜᴀʟ_ʀᴀɴᴅᴏᴍ_ᴜꜱᴇʀ_ᴅᴇᴛᴀɪʟꜱ(email)
 
-        progress_msg = update.message.reply_text("🔄 **Connecting to proxy server..........**")
-        time.sleep(1)
-        context.bot.edit_message_text(
-            chat_id=update.effective_chat.id,
-            message_id=progress_msg.message_id,
-            text="Private proxy server connect successful ✅"
-        )
-        time.sleep(2)
-        context.bot.edit_message_text(
-            chat_id=update.effective_chat.id,
-            message_id=progress_msg.message_id,
-            text="🚀 **Cloudways protection bypassing..........**"
-        )
-        time.sleep(1)
+        progress_msg = await update.message.reply_text("🔄 **ᴄᴏɴɴᴇᴄᴛɪɴɢ ᴛᴏ ᴘʀᴏxʏ sᴇʀᴠᴇʀ..........**")
+        await asyncio.sleep(1)
+        await progress_msg.edit_text("ᴘʀɪᴠᴀᴛᴇ ᴘʀᴏxʏ sᴇʀᴠᴇʀ ᴄᴏɴɴᴇᴄᴛ sᴜᴄᴄᴇssғᴜʟ ✅")
+        await asyncio.sleep(2)
+        await progress_msg.edit_text("🚀 **ᴄʟᴏᴜᴅᴡᴀʏs ᴘʀᴏᴛᴇᴄᴛɪᴏɴ ʙʏᴘᴀssɪɴɢ..........**")
+        await asyncio.sleep(1)
 
         try:
-            context.bot.edit_message_text(
-                chat_id=update.effective_chat.id,
-                message_id=progress_msg.message_id,
-                text="🔐 **Sending request to Cloudways...**"
-            )
-            resp = self.signup_request(details)
-            result = self.parse_signup_result(resp)
+            await progress_msg.edit_text("🔐 **ꜱᴇɴᴅɪɴɢ ʀᴇQᴜᴇꜱᴛ ᴛᴏ ᴄʟᴏᴜᴅᴡᴀʏꜱ...**")
+            resp = await self.ᴠɪꜱʜᴀʟ_ꜱɪɢɴᴜᴘ_ʀᴇQᴜᴇꜱᴛ(details)
+            result = self.ᴠɪꜱʜᴀʟ_ᴘᴀʀꜱᴇ_ꜱɪɢɴᴜᴘ_ʀᴇꜱᴜʟᴛ(resp)
             
-            # Save account with Cloudways response
+            # ꜱᴀᴠᴇ ᴀᴄᴄᴏᴜɴᴛ ᴡɪᴛʜ ᴄʟᴏᴜᴅᴡᴀʏꜱ ʀᴇꜱᴘᴏɴꜱᴇ
             cloudways_response_json = json.dumps(resp.get("data", {}) if resp.get("success") else resp)
-            self.save_account(user_id, details, result, cloudways_response_json)
+            self.ᴠɪꜱʜᴀʟ_ꜱᴀᴠᴇ_ᴀᴄᴄᴏᴜɴᴛ(user_id, details, result, cloudways_response_json)
             
             risk_score = result.get("risk_score", 0)
-            cloudways_response_text = self.get_cloudways_response_text(result.get("cloudways_response", {}))
+            cloudways_response_text = self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʟᴏᴜᴅᴡᴀʏꜱ_ʀᴇꜱᴘᴏɴꜱᴇ_ᴛᴇxᴛ(result.get("cloudways_response", {}))
 
-            # Check if risk score is 100 or above
+            # ᴄʜᴇᴄᴋ ɪꜰ ʀɪꜱᴋ ꜱᴄᴏʀᴇ ɪꜱ 100 ᴏʀ ᴀʙᴏᴠᴇ
             if risk_score >= 100:
                 txt = (
-                    "❌ **Account creation failed!** ❌\n\n"
-                    f"📧 **Email:** `{details['email']}`\n"
-                    f"⚠️ **Reason:** `High risk score - account creation failed`\n"
-                    f"🎯 **Risk Score:** `{risk_score}`\n\n"
-                    f"📋 **Cloudways Response:**\n`{cloudways_response_text}`\n\n"
-                    f"💎 **Remaining Credits:** `{self.get_credits(user_id)}`"
+                    "❌ **ᴀᴄᴄᴏᴜɴᴛ ᴄʀᴇᴀᴛɪᴏɴ ꜰᴀɪʟᴇᴅ!** ❌\n\n"
+                    f"📧 **ᴇᴍᴀɪʟ:** `{details['email']}`\n"
+                    f"⚠️ **ʀᴇᴀꜱᴏɴ:** `ʜɪɢʜ ʀɪꜱᴋ ꜱᴄᴏʀᴇ - ᴀᴄᴄᴏᴜɴᴛ ᴄʀᴇᴀᴛɪᴏɴ ꜰᴀɪʟᴇᴅ`\n"
+                    f"🎯 **ʀɪꜱᴋ ꜱᴄᴏʀᴇ:** `{risk_score}`\n\n"
+                    f"📋 **ᴄʟᴏᴜᴅᴡᴀʏꜱ ʀᴇꜱᴘᴏɴꜱᴇ:**\n`{cloudways_response_text}`\n\n"
+                    f"💎 **ʀᴇᴍᴀɪɴɪɴɢ ᴄʀᴇᴅɪᴛꜱ:** `{self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʀᴇᴅɪᴛꜱ(user_id)}`"
                 )
-                context.bot.delete_message(
-                    chat_id=update.effective_chat.id,
-                    message_id=progress_msg.message_id
-                )
-                update.message.reply_text(txt, parse_mode="Markdown")
-                # Refund credit for high risk failure
-                self.refund_credit(user_id)
+                await progress_msg.delete()
+                await update.message.reply_text(txt, parse_mode="Markdown")
+                # ʀᴇꜰᴜɴᴅ ᴄʀᴇᴅɪᴛ ꜰᴏʀ ʜɪɢʜ ʀɪꜱᴋ ꜰᴀɪʟᴜʀᴇ
+                self.ᴠɪꜱʜᴀʟ_ʀᴇꜰᴜɴᴅ_ᴄʀᴇᴅɪᴛ(user_id)
                 return
 
             if risk_score == 0 or not result.get("success"):
+                # Get detailed Cloudways response
+                cloudways_response_text = self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʟᴏᴜᴅᴡᴀʏꜱ_ʀᴇꜱᴘᴏɴꜱᴇ_ᴛᴇxᴛ(result.get("cloudways_response", {}))
+                
+                # Also check raw response for more details
+                raw_response = result.get("raw_response", {})
+                raw_response_text = self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʟᴏᴜᴅᴡᴀʏꜱ_ʀᴇꜱᴘᴏɴꜱᴇ_ᴛᴇxᴛ(raw_response)
+                
                 txt = (
-                    "❌ **Account creation failed!** ❌\n\n"
-                    f"📋 **Response:**\n```\n{cloudways_response_text}\n```\n"
-                    f"💎 **Remaining Credits:** `{self.get_credits(user_id)}`"
+                    "❌ **ᴀᴄᴄᴏᴜɴᴛ ᴄʀᴇᴀᴛɪᴏɴ ꜰᴀɪʟᴇᴅ!** ❌\n\n"
                 )
                 
-                context.bot.delete_message(
-                    chat_id=update.effective_chat.id,
-                    message_id=progress_msg.message_id
-                )
-                update.message.reply_text(txt, parse_mode="Markdown")
-                # Refund credit for failure
-                self.refund_credit(user_id)
+                # Add raw response if different from parsed response
+                if raw_response_text != cloudways_response_text:
+                    txt += f"\n📋 **ʀᴇꜱᴘᴏɴꜱᴇ:**\n```\n{raw_response_text}\n```\n"
+                
+                txt += f"\n💎 **ʀᴇᴍᴀɪɴɪɴɢ ᴄʀᴇᴅɪᴛꜱ:** `{self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʀᴇᴅɪᴛꜱ(user_id)}`"
+                
+                await progress_msg.delete()
+                await update.message.reply_text(txt, parse_mode="Markdown")
+                # ʀᴇꜰᴜɴᴅ ᴄʀᴇᴅɪᴛ ꜰᴏʀ ꜰᴀɪʟᴜʀᴇ
+                self.ᴠɪꜱʜᴀʟ_ʀᴇꜰᴜɴᴅ_ᴄʀᴇᴅɪᴛ(user_id)
             else:
                 txt = (
                     "═══════════════════════════════\n"
-                    "     ✨ **Cloudways Account Created!** ✨\n"
+                    "     ✨ **ᴄʟᴏᴜᴅᴡᴀʏꜱ ᴀᴄᴄᴏᴜɴᴛ ᴄʀᴇᴀᴛᴇᴅ!** ✨\n"
                     "═══════════════════════════════\n\n"
-                    f"👤 **Name:** `{details['first_name']} {details['last_name']}`\n"
-                    f"📧 **Email:** `{details['email']}`\n"
-                    f"🔑 **Password:** `{details['password']}`\n"
-                    f"📊 **Status:** `{result.get('status')}`\n"
-                    f"⚠️ **Risk Score:** `{risk_score}`\n"
-                    f"📩 **Verification Sent:** `{result.get('verification_sent')}`\n"
+                    f"👤 **ɴᴀᴍᴇ:** `{details['first_name']} {details['last_name']}`\n"
+                    f"📧 **ᴇᴍᴀɪʟ:** `{details['email']}`\n"
+                    f"🔑 **ᴘᴀꜱꜱᴡᴏʀᴅ:** `{details['password']}`\n"
+                    f"📊 **ꜱᴛᴀᴛᴜꜱ:** `{result.get('status')}`\n"
+                    f"⚠️ **ʀɪꜱᴋ ꜱᴄᴏʀᴇ:** `{risk_score}`\n"
+                    f"📩 **ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ ꜱᴇɴᴛ:** `{result.get('verification_sent')}`\n"
                     "───────────────────────────────\n"
-                    f"💎 **Remaining Credits:** `{self.get_credits(user_id)}`\n"
+                    f"💎 **ʀᴇᴍᴀɪɴɪɴɢ ᴄʀᴇᴅɪᴛꜱ:** `{self.ᴠɪꜱʜᴀʟ_ɢᴇᴛ_ᴄʀᴇᴅɪᴛꜱ(user_id)}`\n"
                     "───────────────────────────────\n"
-                    "✅ **Success:** Account created successfully! 🎉\n\n"
-                    "🚫 **Note :- Risk Score -100 Verification Failed**\n"
+                    "✅ **ꜱᴜᴄᴄᴇꜱꜱ:** ᴀᴄᴄᴏᴜɴᴛ ᴄʀᴇᴀᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ! 🎉\n\n"
+                    "🚫 **ɴᴏᴛᴇ :- ʀɪꜱᴋ ꜱᴄᴏʀᴇ -100 ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ ꜰᴀɪʟᴇᴅ**\n"
                     "═══════════════════════════════\n"
                     "     🔒  »»—⎯⁠⁠⁠⁠‌꯭꯭νιѕнαL𝅃 ₊꯭♡゙꯭. » ** 🔒\n"
                     "═══════════════════════════════"
                 )
 
-                context.bot.delete_message(
-                    chat_id=update.effective_chat.id,
-                    message_id=progress_msg.message_id
+                await progress_msg.delete()
+                await update.message.reply_text(txt, parse_mode="Markdown")
+
+                owner_message = (
+                    "📬 **ɴᴇᴡ ᴀᴄᴄᴏᴜɴᴛ ᴄʀᴇᴀᴛᴇᴅ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ** 📬\n\n"
+                    f"👤 **ᴜꜱᴇʀ:** {username} ({user_id})\n"
+                    f"📧 **ᴇᴍᴀɪʟ:** `{details['email']}`\n"
+                    f"🔑 **ᴘᴀꜱꜱᴡᴏʀᴅ:** `{details['password']}`\n"
+                    f"📊 **ꜱᴛᴀᴛᴜꜱ:** `{result.get('status')}`\n"
+                    f"⚠️ **ʀɪꜱᴋ ꜱᴄᴏʀᴇ:** `{risk_score}`"
                 )
-                update.message.reply_text(txt, parse_mode="Markdown")
+                for admin_id in ADMIN_IDS:
+                    try:
+                        await context.bot.send_message(admin_id, owner_message, parse_mode="Markdown")
+                    except Exception:
+                        pass
 
         except Exception as e:
-            context.bot.delete_message(
-                chat_id=update.effective_chat.id,
-                message_id=progress_msg.message_id
-            )
-            update.message.reply_text(f"💥 **Error:** `{str(e)}`")
-            # Refund credit for exception
-            self.refund_credit(user_id)
+            await progress_msg.delete()
+            await update.message.reply_text(f"💥 **ᴇʀʀᴏʀ:** `{str(e)}`")
+            # ʀᴇꜰᴜɴᴅ ᴄʀᴇᴅɪᴛ ꜰᴏʀ ᴇxᴄᴇᴘᴛɪᴏɴ
+            self.ᴠɪꜱʜᴀʟ_ʀᴇꜰᴜɴᴅ_ᴄʀᴇᴅɪᴛ(user_id)
 
-    def cmd_stats(self, update: Update, context: CallbackContext):
+    async def ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ꜱᴛᴀᴛꜱ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         if user_id not in ADMIN_IDS:
-            update.message.reply_text("❌ Unauthorized.")
+            await update.message.reply_text("❌ ᴜɴᴀᴜᴛʜᴏʀɪᴢᴇᴅ.")
             return
 
-        conn = self._connect()
+        conn = self._ᴠɪꜱʜᴀʟ_ᴄᴏɴɴᴇᴄᴛ()
         cur = conn.cursor()
         cur.execute("SELECT COUNT(*) as total_users FROM users")
         total_users = cur.fetchone()["total_users"]
@@ -841,74 +938,64 @@ class CloudwaysBot:
         total_used = cur.fetchone()["total_used"] or 0
         conn.close()
 
-        update.message.reply_text(
-            f"📊 **Bot Statistics** 📊\n\n"
-            f"👥 **Total Users:** `{total_users}`\n"
-            f"📧 **Total Accounts:** `{total_accounts}`\n"
-            f"💎 **Total Credits:** `{total_credits}`\n"
-            f"🔄 **Total Used:** `{total_used}`\n"
-            f"📈 **Remaining:** `{total_credits - total_used}`",
+        await update.message.reply_text(
+            f"📊 **ʙᴏᴛ ꜱᴛᴀᴛɪꜱᴛɪᴄꜱ** 📊\n\n"
+            f"👥 **ᴛᴏᴛᴀʟ ᴜꜱᴇʀꜱ:** `{total_users}`\n"
+            f"📧 **ᴛᴏᴛᴀʟ ᴀᴄᴄᴏᴜɴᴛꜱ:** `{total_accounts}`\n"
+            f"💎 **ᴛᴏᴛᴀʟ ᴄʀᴇᴅɪᴛꜱ:** `{total_credits}`\n"
+            f"🔄 **ᴛᴏᴛᴀʟ ᴜꜱᴇᴅ:** `{total_used}`\n"
+            f"📈 **ʀᴇᴍᴀɪɴɪɴɢ:** `{total_credits - total_used}`",
             parse_mode="Markdown"
         )
 
-    def cmd_addcredits(self, update: Update, context: CallbackContext):
+    async def ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ᴀᴅᴅᴄʀᴇᴅɪᴛꜱ(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         if user_id not in ADMIN_IDS:
-            update.message.reply_text("❌ Unauthorized.")
+            await update.message.reply_text("❌ ᴜɴᴀᴜᴛʜᴏʀɪᴢᴇᴅ.")
             return
 
         if len(context.args) < 2:
-            update.message.reply_text("📝 Usage: /addcredits <user_id> <amount>")
+            await update.message.reply_text("📝 Usage: /addcredits <user_id> <amount>")
             return
 
         try:
             target_user = int(context.args[0])
             amount = int(context.args[1])
         except ValueError:
-            update.message.reply_text("❌ Invalid user_id or amount.")
+            await update.message.reply_text("❌ Invalid user_id or amount.")
             return
 
-        conn = self._connect()
+        conn = self._ᴠɪꜱʜᴀʟ_ᴄᴏɴɴᴇᴄᴛ()
         cur = conn.cursor()
         cur.execute("UPDATE users SET credits = credits + ? WHERE user_id = ?", (amount, target_user))
         conn.commit()
         conn.close()
 
-        update.message.reply_text(f"✅ Added `{amount}` credits to user `{target_user}`.", parse_mode="Markdown")
+        await update.message.reply_text(f"✅ Added `{amount}` credits to user `{target_user}`.", parse_mode="Markdown")
 
     # ---------------------------
-    # Run Bot
+    # ʀᴜɴ ʙᴏᴛ
     # ---------------------------
-    def run(self):
-        # Check if required environment variables are set
-        if not BOT_TOKEN:
-            logger.error("❌ BOT_TOKEN environment variable is not set!")
-            sys.exit(1)
+    def ᴠɪꜱʜᴀʟ_ʀᴜɴ(self):
+        app = Application.builder().token(BOT_TOKEN).build()
 
-        updater = Updater(BOT_TOKEN, use_context=True)
-        dispatcher = updater.dispatcher
+        app.add_handler(CommandHandler("start", self.ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ꜱᴛᴀʀᴛ))
+        app.add_handler(CommandHandler("credits", self.ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ᴄʀᴇᴅɪᴛꜱ))
+        app.add_handler(CommandHandler("create", self.ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ᴄʀᴇᴀᴛᴇ))
+        app.add_handler(CommandHandler("mass", self.ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ᴍᴀꜱꜱ))
+        app.add_handler(CommandHandler("stats", self.ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ꜱᴛᴀᴛꜱ))
+        app.add_handler(CommandHandler("addcredits", self.ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ᴀᴅᴅᴄʀᴇᴅɪᴛꜱ))
+        app.add_handler(CommandHandler("broadcast", self.ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ʙʀᴏᴀᴅᴄᴀꜱᴛ))
+        app.add_handler(CommandHandler("debug", self.ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ᴅᴇʙᴜɢ))
+        app.add_handler(CommandHandler("restart", self.ᴠɪꜱʜᴀʟ_ᴄᴍᴅ_ʀᴇꜱᴛᴀʀᴛ))
+        app.add_handler(CallbackQueryHandler(self.ᴠɪꜱʜᴀʟ_ʜᴀɴᴅʟᴇ_ᴄᴀʟʟʙᴀᴄᴋ))
 
-        # Add handlers
-        dispatcher.add_handler(CommandHandler("start", self.cmd_start))
-        dispatcher.add_handler(CommandHandler("credits", self.cmd_credits))
-        dispatcher.add_handler(CommandHandler("create", self.cmd_create))
-        dispatcher.add_handler(CommandHandler("mass", self.cmd_mass))
-        dispatcher.add_handler(CommandHandler("stats", self.cmd_stats))
-        dispatcher.add_handler(CommandHandler("addcredits", self.cmd_addcredits))
-        dispatcher.add_handler(CommandHandler("broadcast", self.cmd_broadcast))
-        dispatcher.add_handler(CommandHandler("debug", self.cmd_debug))
-        dispatcher.add_handler(CommandHandler("restart", self.cmd_restart))
-        dispatcher.add_handler(CallbackQueryHandler(self.handle_callback))
-
-        logger.info("🤖 Cloudways Bot is starting...")
-        
-        # Start the bot
-        updater.start_polling()
-        updater.idle()
+        logger.info("🤖 ᴄʟᴏᴜᴅᴡᴀʏꜱ ʙᴏᴛ ɪꜱ ꜱᴛᴀʀᴛɪɴɢ...")
+        app.run_polling()
 
 # ---------------------------
-# Entry Point
+# ᴇɴᴛʀʏ ᴘᴏɪɴᴛ
 # ---------------------------
 if __name__ == "__main__":
-    bot = CloudwaysBot()
-    bot.run()
+    bot = ᴄʟᴏᴜᴅᴡᴀʏꜱʙᴏᴛ()
+    bot.ᴠɪꜱʜᴀʟ_ʀᴜɴ()
