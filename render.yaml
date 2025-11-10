@@ -4,11 +4,11 @@ services:
     name: cloudways-bot
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python bot.py
+    buildCommand: pip3 install -r requirements.txt
+    startCommand: python3 bot.py
     envVars:
       - key: BOT_TOKEN
-        value: YOUR_BOT_TOKEN_HERE
+        value: 8485686944:AAH-NNQK2UBSraeZ9balu70-yLYZl00K_P4
       - key: ADMIN_IDS  
         value: "7996314470,7147401720"
       - key: REQUIRED_CHANNELS
