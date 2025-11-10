@@ -9,7 +9,3 @@ services:
     envVars:
       - key: BOT_TOKEN
         value: 8485686944:AAH-NNQK2UBSraeZ9balu70-yLYZl00K_P4
-      - key: ADMIN_IDS  
-        value: "7996314470,7147401720"
-      - key: REQUIRED_CHANNELS
-        value: "@ItsMeVishalSupport,@anniemusicsupport"
