@@ -1,0 +1,15 @@
+yaml
+services:
+  - type: web
+    name: cloudways-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        value: YOUR_BOT_TOKEN_HERE
+      - key: ADMIN_IDS  
+        value: "7996314470,7147401720"
+      - key: REQUIRED_CHANNELS
+        value: "@ItsMeVishalSupport,@anniemusicsupport"
