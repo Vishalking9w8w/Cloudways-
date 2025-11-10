@@ -15,11 +15,11 @@ from typing import Dict, Any, List
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application,
+    Updater,
     CommandHandler,
-    ContextTypes,
+    CallbackContext,
     MessageHandler,
-    filters,
+    Filters,
     CallbackQueryHandler
 )
 
@@ -42,8 +42,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
     handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/tmp/cloudways_bot.log') if 'RENDER' in os.environ else logging.FileHandler('cloudways_bot.log')
+        logging.StreamHandler(sys.stdout)
     ]
 )
 logger = logging.getLogger("cloudways_bot")
@@ -104,15 +103,14 @@ class CloudwaysBot:
     # ---------------------------
     # Restart Function
     # ---------------------------
-    async def cmd_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def cmd_restart(self, update: Update, context: CallbackContext):
         user_id = update.effective_user.id
         if user_id not in ADMIN_IDS:
-            await update.message.reply_text("❌ Unauthorized.")
+            update.message.reply_text("❌ Unauthorized.")
             return
 
-        await update.message.reply_text("🔄 **Restarting bot...**")
+        update.message.reply_text("🔄 **Restarting bot...**")
         
-        # On Render, we can't actually restart the process, so we'll just cleanup
         files_deleted = self._cleanup_files()
         
         restart_message = (
@@ -122,7 +120,7 @@ class CloudwaysBot:
             "🔄 **Bot is now ready for use!**"
         )
 
-        await update.message.reply_text(restart_message, parse_mode="Markdown")
+        update.message.reply_text(restart_message, parse_mode="Markdown")
 
     def _cleanup_files(self) -> int:
         """Clean up temporary files"""
@@ -147,10 +145,10 @@ class CloudwaysBot:
     # ---------------------------
     # Channel Membership Check
     # ---------------------------
-    async def _check_channel_membership(self, user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    def _check_channel_membership(self, user_id: int, context: CallbackContext) -> bool:
         try:
             for channel in REQUIRED_CHANNELS:
-                member = await context.bot.get_chat_member(channel, user_id)
+                member = context.bot.get_chat_member(channel, user_id)
                 if member.status not in ['member', 'administrator', 'creator']:
                     return False
             return True
@@ -160,14 +158,14 @@ class CloudwaysBot:
     # ---------------------------
     # Broadcast Command
     # ---------------------------
-    async def cmd_broadcast(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def cmd_broadcast(self, update: Update, context: CallbackContext):
         user_id = update.effective_user.id
         if user_id not in ADMIN_IDS:
-            await update.message.reply_text("❌ Unauthorized.")
+            update.message.reply_text("❌ Unauthorized.")
             return
             
         if not context.args:
-            await update.message.reply_text("📝 Usage: /broadcast your message here")
+            update.message.reply_text("📝 Usage: /broadcast your message here")
             return
             
         message = " ".join(context.args)
@@ -182,16 +180,16 @@ class CloudwaysBot:
         
         for user in users:
             try:
-                await context.bot.send_message(
+                context.bot.send_message(
                     chat_id=user["user_id"],
                     text=f"📢 **Broadcast** 📢\n\n{message}"
                 )
                 success += 1
             except Exception:
                 failed += 1
-            await asyncio.sleep(0.1)
+            time.sleep(0.1)
             
-        await update.message.reply_text(f"📨 Broadcast results:\n✅ Success: {success}\n❌ Failed: {failed}")
+        update.message.reply_text(f"📨 Broadcast results:\n✅ Success: {success}\n❌ Failed: {failed}")
 
     # ---------------------------
     # User & Credits Management
@@ -357,7 +355,6 @@ class CloudwaysBot:
         except Exception as e:
             return {"success": False, "error": str(e), "status_code": 0}
 
-    @run_blocking
     def signup_request(self, details):
         return self._signup_request_blocking(details)
 
@@ -502,49 +499,52 @@ class CloudwaysBot:
             return f"Error parsing response: {str(e)}"
 
     # ---------------------------
-    # Mass Create Function
+    # Mass Create Function - SIMPLIFIED VERSION
     # ---------------------------
-    async def cmd_mass(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def cmd_mass(self, update: Update, context: CallbackContext):
         user_id = update.effective_user.id
         username = update.effective_user.username or update.effective_user.first_name or "User"
         
-        if not await self._check_channel_membership(user_id, context):
-            await update.message.reply_text("❌ **Please join all required Telegram channels first to use this bot.**")
+        if not self._check_channel_membership(user_id, context):
+            update.message.reply_text("❌ **Please join all required Telegram channels first to use this bot.**")
             return
             
         self.add_user_if_missing(user_id, username)
 
         if not context.args:
-            await update.message.reply_text("📝 **Usage:** `/mass email1.com email2.com email3.com ...`", parse_mode="Markdown")
+            update.message.reply_text("📝 **Usage:** `/mass email1.com email2.com email3.com ...`", parse_mode="Markdown")
             return
 
         emails = [email.strip() for email in context.args if "@" in email and "." in email.split("@")[-1]]
         
         if not emails:
-            await update.message.reply_text("❌ **No valid email addresses provided.**")
+            update.message.reply_text("❌ **No valid email addresses provided.**")
             return
 
         available_credits = self.get_credits(user_id)
         if available_credits < len(emails):
-            await update.message.reply_text(f"❌ **Insufficient credits.** You have `{available_credits}` credits but requested `{len(emails)}` accounts.", parse_mode="Markdown")
+            update.message.reply_text(f"❌ **Insufficient credits.** You have `{available_credits}` credits but requested `{len(emails)}` accounts.", parse_mode="Markdown")
             return
 
         if not self.try_consume_credit(user_id, len(emails)):
-            await update.message.reply_text("💳 **No credits left. Please contact admin.**")
+            update.message.reply_text("💳 **No credits left. Please contact admin.**")
             return
 
-        progress_msg = await update.message.reply_text(f"🚀 **Starting mass creation for {len(emails)} accounts...**")
+        progress_msg = update.message.reply_text(f"🚀 **Starting mass creation for {len(emails)} accounts...**")
         
         success_count = 0
         failed_count = 0
-        results = []
 
         for i, email in enumerate(emails, 1):
             try:
-                await progress_msg.edit_text(f"🔄 **Processing {i}/{len(emails)}: {email}**")
+                context.bot.edit_message_text(
+                    chat_id=update.effective_chat.id,
+                    message_id=progress_msg.message_id,
+                    text=f"🔄 **Processing {i}/{len(emails)}: {email}**"
+                )
                 
                 details = self.random_user_details(email)
-                resp = await self.signup_request(details)
+                resp = self.signup_request(details)
                 result = self.parse_signup_result(resp)
                 
                 # Save account with Cloudways response
@@ -555,20 +555,13 @@ class CloudwaysBot:
 
                 if result.get("success") and risk_score < 100 and risk_score > 0:
                     success_count += 1
-                    results.append(f"✅ **Success:** {email} | Risk: {risk_score}")
                 else:
                     failed_count += 1
-                    cloudways_text = self.get_cloudways_response_text(result.get("cloudways_response", {}))
-                    if risk_score >= 100:
-                        results.append(f"❌ **High Risk:** {email} | Risk: {risk_score} | {cloudways_text}")
-                    else:
-                        results.append(f"❌ **Failed:** {email} | {cloudways_text}")
 
-                await asyncio.sleep(2)  # Rate limiting
+                time.sleep(2)  # Rate limiting
 
             except Exception as e:
                 failed_count += 1
-                results.append(f"❌ **Error:** {email} | {str(e)}")
                 continue
 
         # Send final report
@@ -580,52 +573,31 @@ class CloudwaysBot:
             f"✅ **Successful:** `{success_count}`\n"
             f"❌ **Failed:** `{failed_count}`\n"
             f"💎 **Remaining Credits:** `{self.get_credits(user_id)}`\n\n"
-            "───────────────────────────────\n"
-            "📋 **Detailed Results:**\n"
+            "═══════════════════════════════"
         )
         
-        # Split results if too long for Telegram message
-        results_text = "\n".join(results)
-        if len(report + results_text) > 4000:
-            results_text = "\n".join(results[:15]) + f"\n\n... and {len(results) - 15} more results"
-        
-        final_message = report + results_text + "\n\n═══════════════════════════════"
-        
-        await progress_msg.delete()
-        await update.message.reply_text(final_message, parse_mode="Markdown")
-
-        # Send admin notification
-        if success_count > 0:
-            admin_message = (
-                "📬 **Mass Creation Completed** 📬\n\n"
-                f"👤 **User:** {username} ({user_id})\n"
-                f"📧 **Total:** {len(emails)} emails\n"
-                f"✅ **Success:** {success_count}\n"
-                f"❌ **Failed:** {failed_count}\n"
-                f"💎 **Credits Used:** {len(emails)}"
-            )
-            for admin_id in ADMIN_IDS:
-                try:
-                    await context.bot.send_message(admin_id, admin_message, parse_mode="Markdown")
-                except Exception:
-                    pass
+        context.bot.delete_message(
+            chat_id=update.effective_chat.id,
+            message_id=progress_msg.message_id
+        )
+        update.message.reply_text(report, parse_mode="Markdown")
 
     # ---------------------------
     # Telegram Command Handlers
     # ---------------------------
-    async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def cmd_start(self, update: Update, context: CallbackContext):
         user_id = update.effective_user.id
         username = update.effective_user.username or update.effective_user.first_name or "User"
         self.add_user_if_missing(user_id, username)
         
-        if not await self._check_channel_membership(user_id, context):
+        if not self._check_channel_membership(user_id, context):
             keyboard = [
                 [InlineKeyboardButton("💌 Join Channel 1", url=f"https://t.me/{REQUIRED_CHANNELS[0][1:]}")],
                 [InlineKeyboardButton("💌 Join Channel 2", url=f"https://t.me/{REQUIRED_CHANNELS[1][1:]}")],
                 [InlineKeyboardButton("✅ I've Joined", callback_data="check_join")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(
+            update.message.reply_text(
                 "══════════════════════════\n"
                 "✨ **Welcome to Cloudways Bot!** ✨\n"
                 "══════════════════════════\n\n"
@@ -641,7 +613,7 @@ class CloudwaysBot:
             )
             return
 
-        await update.message.reply_text(
+        update.message.reply_text(
             "👋 **Welcome to Cloudways Bot!** 👋\n\n"
             f"👤 **User:** @{username}\n"
             f"🆔 **ID:** `{user_id}`\n"
@@ -661,14 +633,14 @@ class CloudwaysBot:
             parse_mode="Markdown"
         )
 
-    async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def handle_callback(self, update: Update, context: CallbackContext):
         query = update.callback_query
-        await query.answer()
+        query.answer()
         
         if query.data == "check_join":
             user_id = query.from_user.id
-            if await self._check_channel_membership(user_id, context):
-                await query.edit_message_text(
+            if self._check_channel_membership(user_id, context):
+                query.edit_message_text(
                     "✅ **You have successfully joined all channels!**\n\n"
                     f"💎 **Available Credits:** `{self.get_credits(user_id)}`\n\n"
                     "📧 **Start creating:** `/create email@example.com`\n"
@@ -682,36 +654,36 @@ class CloudwaysBot:
                     [InlineKeyboardButton("💌 Join Channel 2", url=f"https://t.me/{REQUIRED_CHANNELS[1][1:]}")],
                     [InlineKeyboardButton("✅ I've Joined", callback_data="check_join")]
                 ]
-                await query.edit_message_text(
+                query.edit_message_text(
                     "❌ **You haven't joined all required channels yet!**\n\n"
                     "Please join all Telegram channels to use this bot.",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
 
-    async def cmd_credits(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def cmd_credits(self, update: Update, context: CallbackContext):
         user_id = update.effective_user.id
-        await update.message.reply_text(f"💎 **Available Credits:** `{self.get_credits(user_id)}`", parse_mode="Markdown")
+        update.message.reply_text(f"💎 **Available Credits:** `{self.get_credits(user_id)}`", parse_mode="Markdown")
 
     # ---------------------------
     # DEBUG COMMAND
     # ---------------------------
-    async def cmd_debug(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def cmd_debug(self, update: Update, context: CallbackContext):
         """Debug command to test Cloudways API directly"""
         user_id = update.effective_user.id
         if user_id not in ADMIN_IDS:
-            await update.message.reply_text("❌ Unauthorized.")
+            update.message.reply_text("❌ Unauthorized.")
             return
 
         if not context.args:
-            await update.message.reply_text("Usage: /debug email@example.com")
+            update.message.reply_text("Usage: /debug email@example.com")
             return
 
         email = context.args[0]
         details = self.random_user_details(email)
         
-        await update.message.reply_text(f"🔧 **Testing account creation:** `{email}`")
+        update.message.reply_text(f"🔧 **Testing account creation:** `{email}`")
         
-        resp = await self.signup_request(details)
+        resp = self.signup_request(details)
         result = self.parse_signup_result(resp)
         
         debug_text = (
@@ -724,43 +696,55 @@ class CloudwaysBot:
             f"```json\n{json.dumps(resp, indent=2)}\n```"
         )
         
-        await update.message.reply_text(debug_text, parse_mode="Markdown")
+        update.message.reply_text(debug_text, parse_mode="Markdown")
 
-    async def cmd_create(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def cmd_create(self, update: Update, context: CallbackContext):
         user_id = update.effective_user.id
         username = update.effective_user.username or update.effective_user.first_name or "User"
         
-        if not await self._check_channel_membership(user_id, context):
-            await update.message.reply_text("❌ **Please join all required Telegram channels first to use this bot.**")
+        if not self._check_channel_membership(user_id, context):
+            update.message.reply_text("❌ **Please join all required Telegram channels first to use this bot.**")
             return
             
         self.add_user_if_missing(user_id, username)
 
         if not context.args:
-            await update.message.reply_text("📝 **Usage:** `/create email@example.com`", parse_mode="Markdown")
+            update.message.reply_text("📝 **Usage:** `/create email@example.com`", parse_mode="Markdown")
             return
 
         email = context.args[0].strip()
         if "@" not in email or "." not in email.split("@")[-1]:
-            await update.message.reply_text("❌ **Invalid email format.**")
+            update.message.reply_text("❌ **Invalid email format.**")
             return
 
         if not self.try_consume_credit(user_id):
-            await update.message.reply_text("💳 **No credits left. Please contact admin. @Its_me_Vishall**")
+            update.message.reply_text("💳 **No credits left. Please contact admin. @Its_me_Vishall**")
             return
 
         details = self.random_user_details(email)
 
-        progress_msg = await update.message.reply_text("🔄 **Connecting to proxy server..........**")
-        await asyncio.sleep(1)
-        await progress_msg.edit_text("Private proxy server connect successful ✅")
-        await asyncio.sleep(2)
-        await progress_msg.edit_text("🚀 **Cloudways protection bypassing..........**")
-        await asyncio.sleep(1)
+        progress_msg = update.message.reply_text("🔄 **Connecting to proxy server..........**")
+        time.sleep(1)
+        context.bot.edit_message_text(
+            chat_id=update.effective_chat.id,
+            message_id=progress_msg.message_id,
+            text="Private proxy server connect successful ✅"
+        )
+        time.sleep(2)
+        context.bot.edit_message_text(
+            chat_id=update.effective_chat.id,
+            message_id=progress_msg.message_id,
+            text="🚀 **Cloudways protection bypassing..........**"
+        )
+        time.sleep(1)
 
         try:
-            await progress_msg.edit_text("🔐 **Sending request to Cloudways...**")
-            resp = await self.signup_request(details)
+            context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=progress_msg.message_id,
+                text="🔐 **Sending request to Cloudways...**"
+            )
+            resp = self.signup_request(details)
             result = self.parse_signup_result(resp)
             
             # Save account with Cloudways response
@@ -780,32 +764,27 @@ class CloudwaysBot:
                     f"📋 **Cloudways Response:**\n`{cloudways_response_text}`\n\n"
                     f"💎 **Remaining Credits:** `{self.get_credits(user_id)}`"
                 )
-                await progress_msg.delete()
-                await update.message.reply_text(txt, parse_mode="Markdown")
+                context.bot.delete_message(
+                    chat_id=update.effective_chat.id,
+                    message_id=progress_msg.message_id
+                )
+                update.message.reply_text(txt, parse_mode="Markdown")
                 # Refund credit for high risk failure
                 self.refund_credit(user_id)
                 return
 
             if risk_score == 0 or not result.get("success"):
-                # Get detailed Cloudways response
-                cloudways_response_text = self.get_cloudways_response_text(result.get("cloudways_response", {}))
-                
-                # Also check raw response for more details
-                raw_response = result.get("raw_response", {})
-                raw_response_text = self.get_cloudways_response_text(raw_response)
-                
                 txt = (
                     "❌ **Account creation failed!** ❌\n\n"
+                    f"📋 **Response:**\n```\n{cloudways_response_text}\n```\n"
+                    f"💎 **Remaining Credits:** `{self.get_credits(user_id)}`"
                 )
                 
-                # Add raw response if different from parsed response
-                if raw_response_text != cloudways_response_text:
-                    txt += f"\n📋 **Response:**\n```\n{raw_response_text}\n```\n"
-                
-                txt += f"\n💎 **Remaining Credits:** `{self.get_credits(user_id)}`"
-                
-                await progress_msg.delete()
-                await update.message.reply_text(txt, parse_mode="Markdown")
+                context.bot.delete_message(
+                    chat_id=update.effective_chat.id,
+                    message_id=progress_msg.message_id
+                )
+                update.message.reply_text(txt, parse_mode="Markdown")
                 # Refund credit for failure
                 self.refund_credit(user_id)
             else:
@@ -829,33 +808,25 @@ class CloudwaysBot:
                     "═══════════════════════════════"
                 )
 
-                await progress_msg.delete()
-                await update.message.reply_text(txt, parse_mode="Markdown")
-
-                owner_message = (
-                    "📬 **New Account Created Successfully** 📬\n\n"
-                    f"👤 **User:** {username} ({user_id})\n"
-                    f"📧 **Email:** `{details['email']}`\n"
-                    f"🔑 **Password:** `{details['password']}`\n"
-                    f"📊 **Status:** `{result.get('status')}`\n"
-                    f"⚠️ **Risk Score:** `{risk_score}`"
+                context.bot.delete_message(
+                    chat_id=update.effective_chat.id,
+                    message_id=progress_msg.message_id
                 )
-                for admin_id in ADMIN_IDS:
-                    try:
-                        await context.bot.send_message(admin_id, owner_message, parse_mode="Markdown")
-                    except Exception:
-                        pass
+                update.message.reply_text(txt, parse_mode="Markdown")
 
         except Exception as e:
-            await progress_msg.delete()
-            await update.message.reply_text(f"💥 **Error:** `{str(e)}`")
+            context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=progress_msg.message_id
+            )
+            update.message.reply_text(f"💥 **Error:** `{str(e)}`")
             # Refund credit for exception
             self.refund_credit(user_id)
 
-    async def cmd_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def cmd_stats(self, update: Update, context: CallbackContext):
         user_id = update.effective_user.id
         if user_id not in ADMIN_IDS:
-            await update.message.reply_text("❌ Unauthorized.")
+            update.message.reply_text("❌ Unauthorized.")
             return
 
         conn = self._connect()
@@ -870,7 +841,7 @@ class CloudwaysBot:
         total_used = cur.fetchone()["total_used"] or 0
         conn.close()
 
-        await update.message.reply_text(
+        update.message.reply_text(
             f"📊 **Bot Statistics** 📊\n\n"
             f"👥 **Total Users:** `{total_users}`\n"
             f"📧 **Total Accounts:** `{total_accounts}`\n"
@@ -880,21 +851,21 @@ class CloudwaysBot:
             parse_mode="Markdown"
         )
 
-    async def cmd_addcredits(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    def cmd_addcredits(self, update: Update, context: CallbackContext):
         user_id = update.effective_user.id
         if user_id not in ADMIN_IDS:
-            await update.message.reply_text("❌ Unauthorized.")
+            update.message.reply_text("❌ Unauthorized.")
             return
 
         if len(context.args) < 2:
-            await update.message.reply_text("📝 Usage: /addcredits <user_id> <amount>")
+            update.message.reply_text("📝 Usage: /addcredits <user_id> <amount>")
             return
 
         try:
             target_user = int(context.args[0])
             amount = int(context.args[1])
         except ValueError:
-            await update.message.reply_text("❌ Invalid user_id or amount.")
+            update.message.reply_text("❌ Invalid user_id or amount.")
             return
 
         conn = self._connect()
@@ -903,7 +874,7 @@ class CloudwaysBot:
         conn.commit()
         conn.close()
 
-        await update.message.reply_text(f"✅ Added `{amount}` credits to user `{target_user}`.", parse_mode="Markdown")
+        update.message.reply_text(f"✅ Added `{amount}` credits to user `{target_user}`.", parse_mode="Markdown")
 
     # ---------------------------
     # Run Bot
@@ -914,27 +885,26 @@ class CloudwaysBot:
             logger.error("❌ BOT_TOKEN environment variable is not set!")
             sys.exit(1)
 
-        app = Application.builder().token(BOT_TOKEN).build()
+        updater = Updater(BOT_TOKEN, use_context=True)
+        dispatcher = updater.dispatcher
 
-        app.add_handler(CommandHandler("start", self.cmd_start))
-        app.add_handler(CommandHandler("credits", self.cmd_credits))
-        app.add_handler(CommandHandler("create", self.cmd_create))
-        app.add_handler(CommandHandler("mass", self.cmd_mass))
-        app.add_handler(CommandHandler("stats", self.cmd_stats))
-        app.add_handler(CommandHandler("addcredits", self.cmd_addcredits))
-        app.add_handler(CommandHandler("broadcast", self.cmd_broadcast))
-        app.add_handler(CommandHandler("debug", self.cmd_debug))
-        app.add_handler(CommandHandler("restart", self.cmd_restart))
-        app.add_handler(CallbackQueryHandler(self.handle_callback))
+        # Add handlers
+        dispatcher.add_handler(CommandHandler("start", self.cmd_start))
+        dispatcher.add_handler(CommandHandler("credits", self.cmd_credits))
+        dispatcher.add_handler(CommandHandler("create", self.cmd_create))
+        dispatcher.add_handler(CommandHandler("mass", self.cmd_mass))
+        dispatcher.add_handler(CommandHandler("stats", self.cmd_stats))
+        dispatcher.add_handler(CommandHandler("addcredits", self.cmd_addcredits))
+        dispatcher.add_handler(CommandHandler("broadcast", self.cmd_broadcast))
+        dispatcher.add_handler(CommandHandler("debug", self.cmd_debug))
+        dispatcher.add_handler(CommandHandler("restart", self.cmd_restart))
+        dispatcher.add_handler(CallbackQueryHandler(self.handle_callback))
 
         logger.info("🤖 Cloudways Bot is starting...")
         
         # Start the bot
-        if 'RENDER' in os.environ:
-            # On Render, use webhook (optional) or keep polling
-            app.run_polling()
-        else:
-            app.run_polling()
+        updater.start_polling()
+        updater.idle()
 
 # ---------------------------
 # Entry Point
